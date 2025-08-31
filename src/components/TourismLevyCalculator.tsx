@@ -39,60 +39,90 @@ export function TourismLevyCalculator({ language, t }: TourismLevyCalculatorProp
     if (!validateForm()) return;
 
     setIsCalculating(true);
-    
-    // Simulate API call with mock calculation
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
+
     const revenueAmount = parseFloat(revenue);
-    const baseRate = 0.003; // 0.3% base rate
-    const municipalityMultiplier = municipality.includes('Linz') || municipality.includes('Salzburg') ? 1.2 : 1.0;
-    const activityMultiplier = businessActivity.includes('Hotel') ? 1.5 : businessActivity.includes('Restaurant') ? 1.2 : 1.0;
-    
-    const calculatedAmount = revenueAmount * baseRate * municipalityMultiplier * activityMultiplier;
-    const minAmount = 50; // Minimum levy
-    const finalAmount = Math.max(calculatedAmount, minAmount);
 
-    const mockResult: CalculationResult = {
-      amount: finalAmount,
-      currency: 'EUR',
-      breakdown: [
+    try {
+      const response = await fetch(
+        'https://dtal-tourism-dvhvcqgye0fmeddr.germanywestcentral-01.azurewebsites.net/dtal/calculate_ooetourism_levy',
         {
-          label: 'Jahresumsatz',
-          labelEn: 'Annual Revenue',
-          value: `€${revenueAmount.toLocaleString()}`
-        },
-        {
-          label: 'Grundsatz',
-          labelEn: 'Base Rate',
-          value: `${(baseRate * 100).toFixed(1)}%`
-        },
-        {
-          label: 'Gemeindezuschlag',
-          labelEn: 'Municipal Surcharge',
-          value: `${((municipalityMultiplier - 1) * 100).toFixed(0)}%`
-        },
-        {
-          label: 'Betriebsart-Faktor',
-          labelEn: 'Business Activity Factor',
-          value: `${((activityMultiplier - 1) * 100).toFixed(0)}%`
-        },
-        {
-          label: 'Mindestbetrag',
-          labelEn: 'Minimum Amount',
-          value: `€${minAmount}`
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            municipality_name: municipality,
+            business_activity: businessActivity,
+            revenue_two_years_ago: revenueAmount
+          })
         }
-      ],
-      lawReferences: [
-        '§ 3 Oö. Tourismusabgabegesetz - Bemessungsgrundlage',
-        '§ 4 Oö. Tourismusabgabegesetz - Abgabensatz',
-        '§ 5 Oö. Tourismusabgabegesetz - Mindestabgabe'
-      ],
-      notes: 'Die Berechnung erfolgt auf Basis des Jahresumsatzes von vor zwei Jahren. Der Mindestbetrag von €50 gilt für alle Betriebe. Gemeindezuschläge können variieren.',
-      notesEn: 'The calculation is based on the annual revenue from two years ago. The minimum amount of €50 applies to all businesses. Municipal surcharges may vary.'
-    };
+      );
 
-    setResult(mockResult);
-    setIsCalculating(false);
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+
+      const data = await response.json();
+
+      const baseRate = data.base_rate ?? data.calculation_details?.base_rate ?? 0.003;
+      const municipalityMultiplier =
+        data.municipality_multiplier ?? data.calculation_details?.municipal_multiplier ?? 1.0;
+      const activityMultiplier =
+        data.activity_multiplier ?? data.calculation_details?.activity_multiplier ?? 1.0;
+      const minAmount = data.minimum_levy ?? data.calculation_details?.minimum_levy ?? 50;
+      const finalAmount = data.final_levy ?? data.levy_amount ?? 0;
+
+      const apiResult: CalculationResult = {
+        amount: finalAmount,
+        currency: data.currency ?? 'EUR',
+        breakdown: [
+          {
+            label: 'Jahresumsatz',
+            labelEn: 'Annual Revenue',
+            value: `€${revenueAmount.toLocaleString()}`
+          },
+          {
+            label: 'Grundsatz',
+            labelEn: 'Base Rate',
+            value: `${(baseRate * 100).toFixed(1)}%`
+          },
+          {
+            label: 'Gemeindezuschlag',
+            labelEn: 'Municipal Surcharge',
+            value: `${((municipalityMultiplier - 1) * 100).toFixed(0)}%`
+          },
+          {
+            label: 'Betriebsart-Faktor',
+            labelEn: 'Business Activity Factor',
+            value: `${((activityMultiplier - 1) * 100).toFixed(0)}%`
+          },
+          {
+            label: 'Mindestbetrag',
+            labelEn: 'Minimum Amount',
+            value: `€${minAmount}`
+          }
+        ],
+        lawReferences:
+          data.law_references ?? [
+            '§ 3 Oö. Tourismusabgabegesetz - Bemessungsgrundlage',
+            '§ 4 Oö. Tourismusabgabegesetz - Abgabensatz',
+            '§ 5 Oö. Tourismusabgabegesetz - Mindestabgabe'
+          ],
+        notes:
+          data.notes ??
+          'Die Berechnung erfolgt auf Basis des Jahresumsatzes von vor zwei Jahren. Der Mindestbetrag von €50 gilt für alle Betriebe. Gemeindezuschläge können variieren.',
+        notesEn:
+          data.notesEn ??
+          'The calculation is based on the annual revenue from two years ago. The minimum amount of €50 applies to all businesses. Municipal surcharges may vary.'
+      };
+
+      setResult(apiResult);
+    } catch (err) {
+      console.error(err);
+      alert(language === 'de' ? 'Berechnung fehlgeschlagen' : 'Calculation failed');
+    } finally {
+      setIsCalculating(false);
+    }
   };
 
   return (
