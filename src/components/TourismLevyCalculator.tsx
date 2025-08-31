@@ -183,13 +183,11 @@ export function TourismLevyCalculator({ language, t }: TourismLevyCalculatorProp
               <Euro className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 id="revenue"
-                type="number"
+                type="text"
                 placeholder={t('enterAmount')}
                 value={revenue}
                 onChange={(e) => setRevenue(e.target.value)}
                 className="pl-10"
-                min="0"
-                step="0.01"
               />
             </div>
             {errors.revenue && (
